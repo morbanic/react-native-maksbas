@@ -13,6 +13,18 @@ Self-contained native module — no `@react-native-firebase` dependency.
 npm install react-native-maksbas
 ```
 
+Straight from GitHub works too — `lib/` is not committed, so npm builds the
+package from source during install via the `prepare` script:
+
+```bash
+npm install github:USER/react-native-maksbas     # default branch
+npm install github:USER/react-native-maksbas#v0.1.0
+```
+
+The one thing that breaks this is `npm install --ignore-scripts` (or a CI that
+sets it globally) — `prepare` never runs and the package lands without `lib/`.
+Allow scripts for this dependency, or install from a published tarball.
+
 Then rebuild. A JS reload is not enough after adding a native package:
 
 ```bash
