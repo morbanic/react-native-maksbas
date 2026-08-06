@@ -1,0 +1,36 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+. Without it notifications are silently dropped. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+
+        <!--
+          Handles data-only messages. Because we send no `notification` block,
+          this runs for every push, foreground or background, and draws the
+          notification itself.
+        -->
+        <service
+            android:name=".MaksbasMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
+          Tap target. An invisible activity rather than a BroadcastReceiver:
+          Android 12 blocks notification trampolines that start an activity from
+          a receiver or service, but activity-to-activity is still allowed.
+        -->
+        <activity
+            android:name=".MaksbasOpenActivity"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:exported="false" />
+
+    </application>
+
+</manifest>
