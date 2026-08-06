@@ -69,7 +69,7 @@ class MaksbasOpenActivity : Activity() {
     }
 
     companion object {
-        fun intentFor(context: Context, payload: NotificationPayload): Intent =
+        internal fun intentFor(context: Context, payload: NotificationPayload): Intent =
             Intent(context, MaksbasOpenActivity::class.java).apply {
                 putExtras(payload.toBundle())
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

@@ -7,6 +7,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import com.facebook.react.ReactApplication
+import com.facebook.react.ReactHost
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -14,7 +15,7 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
-import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.PermissionAwareActivity
 import com.facebook.react.modules.core.PermissionListener
 import com.google.firebase.messaging.FirebaseMessaging
@@ -60,18 +61,24 @@ class MaksbasModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun getFcmToken(promise: Promise) {
-        FirebaseMessaging.getInstance().token
+        // getInstance() throws rather than failing the task when Firebase was
+        // never configured — the single most common setup mistake — so the
+        // explanation has to be attached here too, not only to the listener.
+        val messaging = runCatching { FirebaseMessaging.getInstance() }.getOrElse { error ->
+            promise.reject("fcm_token_failed", setupHint(error), error)
+            return
+        }
+
+        messaging.token
             .addOnSuccessListener { token -> promise.resolve(token) }
             .addOnFailureListener { error ->
-                promise.reject(
-                    "fcm_token_failed",
-                    "Could not get an FCM token. Check that google-services.json is in " +
-                        "android/app/ and that the google-services Gradle plugin is applied. " +
-                        "(${error.message})",
-                    error,
-                )
+                promise.reject("fcm_token_failed", setupHint(error), error)
             }
     }
+
+    private fun setupHint(error: Throwable) =
+        "Could not get an FCM token. Check that google-services.json is in android/app/ " +
+            "and that the google-services Gradle plugin is applied. (${error.message})"
 
     @ReactMethod
     fun getPermissionStatus(promise: Promise) {
@@ -99,7 +106,7 @@ class MaksbasModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        val activity = currentActivity as? PermissionAwareActivity
+        val activity = reactApplicationContext.currentActivity as? PermissionAwareActivity
         if (activity == null) {
             promise.reject(
                 "no_activity",
@@ -200,14 +207,21 @@ class MaksbasModule(reactContext: ReactApplicationContext) :
          * closed is the normal case, not an error. Callers use the return value
          * to decide whether to park the payload instead.
          */
-        @JvmStatic
-        fun emit(context: Context, event: String, payload: NotificationPayload): Boolean {
+        internal fun emit(context: Context, event: String, payload: NotificationPayload): Boolean =
+            emitDeviceEvent(context, event, payload.toWritableMap())
+
+        internal fun emitTokenRefresh(context: Context, token: String): Boolean =
+            emitDeviceEvent(
+                context,
+                "maksbas:tokenRefreshed",
+                Arguments.createMap().apply { putString("token", token) },
+            )
+
+        private fun emitDeviceEvent(context: Context, event: String, args: WritableMap): Boolean {
             val reactContext = activeReactContext(context) ?: return false
 
             return runCatching {
-                reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit(event, payload.toWritableMap())
+                reactContext.emitDeviceEvent(event, args)
                 true
             }.getOrElse { error ->
                 Log.d("Maksbas", "could not emit $event: ${error.message}")
@@ -215,24 +229,16 @@ class MaksbasModule(reactContext: ReactApplicationContext) :
             }
         }
 
-        @JvmStatic
-        fun emitTokenRefresh(context: Context, token: String): Boolean {
-            val reactContext = activeReactContext(context) ?: return false
-
-            return runCatching {
-                reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                    .emit("maksbas:tokenRefreshed", Arguments.createMap().apply {
-                        putString("token", token)
-                    })
-                true
-            }.getOrDefault(false)
-        }
-
+        /**
+         * The React context, but only when one is actually running.
+         *
+         * Reached through [ReactHost] rather than the old `ReactNativeHost` —
+         * under the New Architecture the latter throws on access, and React
+         * Native has been New-Architecture-only since 0.82.
+         */
         private fun activeReactContext(context: Context): ReactContext? = runCatching {
             val application = context.applicationContext as? ReactApplication ?: return null
-            val instanceManager = application.reactNativeHost.reactInstanceManager
-            instanceManager.currentReactContext?.takeIf { it.hasActiveReactInstance() }
+            application.reactHost?.currentReactContext?.takeIf { it.hasActiveReactInstance() }
         }.getOrNull()
     }
 }
