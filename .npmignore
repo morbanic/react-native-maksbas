@@ -1,0 +1,19 @@
+# Without this file npm falls back to .gitignore when packing, and `lib/` is
+# ignored there — which would ship a package with no build output on
+# `npm install github:...`. The `files` field in package.json is the real
+# allowlist; this file only excludes build junk inside those directories.
+#
+# Note `src/` is intentionally NOT ignored — the `react-native` and `source`
+# fields point at src/index.ts, which is what Metro resolves.
+
+node_modules/
+android/build/
+android/.gradle/
+android/.cxx/
+android/local.properties
+*.iml
+*.keystore
+google-services.json
+*.tsbuildinfo
+.env
+.env.*
