@@ -1,7 +1,7 @@
 {
   "name": "react-native-maksbas",
   "version": "0.1.0",
-  "description": "Android push notifications for React Native — device registry, key:value attributes, segmentation. Pairs with maksbas-nextjs.",
+  "description": "Push notifications for React Native (Android and iOS, both through FCM) — device registry, key:value attributes, segmentation. Pairs with maksbas-nextjs.",
   "license": "MIT",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -13,6 +13,8 @@
     "lib",
     "android",
     "!android/build",
+    "ios",
+    "react-native-maksbas.podspec",
     "react-native.config.js",
     "README.md"
   ],
@@ -49,6 +51,7 @@
   "keywords": [
     "react-native",
     "android",
+    "ios",
     "push-notifications",
     "fcm",
     "onesignal"

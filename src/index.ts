@@ -3,6 +3,7 @@ export { MaksbasApiError } from './api'
 export type {
   AttributeValue,
   Attributes,
+  DeviceDetails,
   DeviceInfo,
   MaksbasNotification,
   MaksbasOptions,

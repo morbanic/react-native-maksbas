@@ -3,6 +3,7 @@ import { MaksbasApi, MaksbasApiError } from './api'
 import { NATIVE_EVENT, isSupported, native, nativeEvents } from './native'
 import type {
   Attributes,
+  DeviceDetails,
   DeviceInfo,
   MaksbasNotification,
   MaksbasOptions,
@@ -58,14 +59,15 @@ class MaksbasClient {
     this.options = { ...options, endpoint: stripTrailingSlash(options.endpoint) }
     this.api = new MaksbasApi(this.options.endpoint, options.publicKey, options.debug ?? false)
 
-    if (Platform.OS !== 'android') {
-      this.log('not Android — SDK is inert')
+    if (!isSupportedPlatform()) {
+      this.log(`${Platform.OS} is not supported — SDK is inert`)
       return null
     }
     if (!isSupported) {
       throw new Error(
-        '[maksbas] native module missing. Rebuild the app (`npx react-native run-android`); ' +
-          'a JS reload is not enough after installing a native package.',
+        '[maksbas] native module missing. Rebuild the app (`npx react-native run-android`, or ' +
+          '`pod install` and an Xcode build on iOS); a JS reload is not enough after installing ' +
+          'a native package.',
       )
     }
 
@@ -120,7 +122,7 @@ class MaksbasClient {
 
     const result = await api.register({
       fcmToken,
-      platform: 'android',
+      platform: Platform.OS,
       notificationsEnabled: granted,
       sdkVersion: SDK_VERSION,
       deviceModel: nativeConstant('Model'),
@@ -190,10 +192,12 @@ class MaksbasClient {
   }
 
   /**
-   * Asks for the Android 13 notification permission.
+   * Asks for the notification permission — POST_NOTIFICATIONS on Android 13+,
+   * alert/sound/badge on iOS.
    *
    * On Android 12 and below there is no runtime permission, so this resolves
-   * `granted` without showing anything.
+   * `granted` without showing anything. Both systems show the dialog once;
+   * later calls return the stored answer.
    */
   async requestPermission(): Promise<PermissionStatus> {
     this.assertReady('requestPermission')
@@ -212,7 +216,7 @@ class MaksbasClient {
   }
 
   async getPermissionStatus(): Promise<PermissionStatus> {
-    if (Platform.OS !== 'android') return 'unsupported'
+    if (!isSupportedPlatform()) return 'unsupported'
     return native.getPermissionStatus()
   }
 
@@ -258,6 +262,30 @@ class MaksbasClient {
     }
   }
 
+  /**
+   * The full server record for this device plus the live permission status.
+   * Meant for debug screens; `getDevice()` stays the lean everyday call.
+   */
+  async getDeviceDetails(): Promise<DeviceDetails | null> {
+    if (!this.deviceId || !this.deviceSecret) return null
+
+    const [remote, fcmToken, permission] = await Promise.all([
+      this.requireApi().getDevice(this.deviceId, this.deviceSecret),
+      native.getItem(KEY.fcmToken),
+      this.getPermissionStatus(),
+    ])
+
+    const r = remote as Partial<Omit<DeviceDetails, 'permission'>>
+    return {
+      ...r,
+      id: this.deviceId,
+      attributes: r.attributes ?? {},
+      notificationsEnabled: r.notificationsEnabled ?? permission === 'granted',
+      fcmToken: r.fcmToken ?? fcmToken ?? '',
+      permission,
+    }
+  }
+
   /** Fires when a push arrives while the app is in the foreground. */
   onReceived(listener: Listener<MaksbasNotification>): Unsubscribe {
     this.receivedListeners.add(listener)
@@ -277,7 +305,7 @@ class MaksbasClient {
    * `onOpened` cannot fire for it. Check this once on mount.
    */
   async getInitialNotification(): Promise<MaksbasNotification | null> {
-    if (Platform.OS !== 'android') return null
+    if (!isSupportedPlatform()) return null
     return native.getInitialNotification()
   }
 
@@ -346,15 +374,24 @@ class MaksbasClient {
   }
 }
 
+function isSupportedPlatform(): boolean {
+  return Platform.OS === 'android' || Platform.OS === 'ios'
+}
+
 function stripTrailingSlash(value: string): string {
   return value.endsWith('/') ? value.slice(0, -1) : value
 }
 
 /** Optional constants exposed by the native module; absent on older builds. */
 function nativeConstant(name: 'Model' | 'Language' | 'Timezone'): string | undefined {
-  const constants = (NativeModules.Maksbas as { getConstants?: () => Record<string, string> })
-    ?.getConstants?.()
-  return constants?.[name.toLowerCase()]
+  // Legacy modules expose constants as properties under the New Architecture
+  // interop layer, and through getConstants() on the old bridge.
+  const module = NativeModules.Maksbas as
+    | ({ getConstants?: () => Record<string, string> } & Record<string, unknown>)
+    | undefined
+  const constants = module?.getConstants?.() ?? module
+  const value = constants?.[name.toLowerCase()]
+  return typeof value === 'string' ? value : undefined
 }
 
 export const Maksbas = new MaksbasClient()

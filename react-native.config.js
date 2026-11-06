@@ -6,8 +6,7 @@ module.exports = {
         packageImportPath: 'import com.maksbas.MaksbasPackage;',
         packageInstance: 'new MaksbasPackage()',
       },
-      // Autolinking must not try to build an iOS target that doesn't exist.
-      ios: null,
+      // iOS is picked up from react-native-maksbas.podspec at the package root.
     },
   },
 }

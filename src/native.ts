@@ -41,23 +41,23 @@ export interface MaksbasNativeModule {
 
 const LINKING_ERROR =
   "[maksbas] The native module isn't linked.\n" +
-  '- Rebuild the app after installing (`npx react-native run-android`), not just reload JS\n' +
-  '- Make sure google-services.json is in android/app/\n' +
+  '- Rebuild the app after installing (`npx react-native run-android` / `pod install` + Xcode build), not just reload JS\n' +
+  '- Android: make sure google-services.json is in android/app/\n' +
+  '- iOS: make sure GoogleService-Info.plist is in the app target\n' +
   '- If you use Expo, this package needs a development build, not Expo Go'
 
+const SUPPORTED_PLATFORM = Platform.OS === 'android' || Platform.OS === 'ios'
+
 /**
- * iOS gets working no-ops rather than a crash.
- *
- * The decision was Android-only, but a shared codebase will still call
- * `init()` on both platforms. Throwing there would make every iOS launch fail
- * over a feature that simply isn't implemented yet.
+ * Other platforms (web, Windows, tvOS…) get working no-ops rather than a crash,
+ * so a shared codebase can call `init()` everywhere.
  */
-const iosNoop: MaksbasNativeModule = {
+const unsupportedNoop: MaksbasNativeModule = {
   async configure() {},
   async setCredentials() {},
   async clearCredentials() {},
   async getFcmToken() {
-    throw new Error('[maksbas] iOS push is not implemented in this version')
+    throw new Error(`[maksbas] push is not supported on ${Platform.OS}`)
   },
   async requestPermission() {
     return 'unsupported'
@@ -79,7 +79,7 @@ const iosNoop: MaksbasNativeModule = {
 }
 
 function resolveModule(): MaksbasNativeModule {
-  if (Platform.OS !== 'android') return iosNoop
+  if (!SUPPORTED_PLATFORM) return unsupportedNoop
 
   const module = NativeModules.Maksbas as MaksbasNativeModule | undefined
   if (!module) {
@@ -94,12 +94,10 @@ function resolveModule(): MaksbasNativeModule {
 
 export const native = resolveModule()
 
-export const isSupported = Platform.OS === 'android' && Boolean(NativeModules.Maksbas)
+export const isSupported = SUPPORTED_PLATFORM && Boolean(NativeModules.Maksbas)
 
 export const nativeEvents =
-  Platform.OS === 'android' && NativeModules.Maksbas
-    ? new NativeEventEmitter(NativeModules.Maksbas)
-    : null
+  SUPPORTED_PLATFORM && NativeModules.Maksbas ? new NativeEventEmitter(NativeModules.Maksbas) : null
 
 export const NATIVE_EVENT = {
   received: 'maksbas:received',

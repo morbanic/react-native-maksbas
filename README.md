@@ -1,6 +1,6 @@
 # react-native-maksbas
 
-Android push notifications for React Native. Talks to a
+Push notifications for React Native (Android and iOS). Talks to a
 [`maksbas-nextjs`](../maksbas-nextjs) backend.
 
 Self-contained native module — no `@react-native-firebase` dependency.
@@ -138,6 +138,7 @@ useEffect(() => {
 | `getPermissionStatus()` | `PermissionStatus` |
 | `setAttributes(attrs)` | stored attributes |
 | `getDevice()` | `DeviceInfo \| null` |
+| `getDeviceDetails()` | `DeviceDetails \| null` — full server record (platform, versions, `active`, `lastSeenAt`…) plus live permission, for debug screens |
 | `onReceived(cb)` | unsubscribe function |
 | `onOpened(cb)` | unsubscribe function |
 | `getInitialNotification()` | `MaksbasNotification \| null` |
@@ -187,9 +188,52 @@ a `channel` field to the payload on both sides.
 
 ### iOS
 
-Every method is a no-op. `init()` returns `null` instead of throwing, so a shared
-codebase runs unchanged. `getFcmToken()` is the one method that throws, and only
-if called directly.
+Same JS API, same server, same token format: iOS goes through FCM too, and FCM
+hands the message to APNs. The server adds an `apns` block with `aps.alert` to
+every message (iOS will not draw a data-only message), while Android keeps
+receiving data-only and drawing its own.
+
+Setup in the host app:
+
+1. **Firebase** — add an iOS app with your bundle id to the same Firebase
+   project, download `GoogleService-Info.plist` and add it to the app target
+   (Copy Bundle Resources). Without it the SDK logs a warning and stays off;
+   the rest of the app runs normally.
+2. **APNs key** — Apple Developer → Keys → new key with Apple Push
+   Notifications service; upload the `.p8` with its Key ID and Team ID under
+   Firebase → Project settings → Cloud Messaging → Apple app configuration.
+3. **Capability** — Push Notifications on the target, i.e. `aps-environment`
+   in the entitlements file (`development`; App Store export switches it to
+   `production`).
+4. **Podfile** — Firebase's Swift pods need module maps when React Native is
+   built as static libraries:
+   ```ruby
+   pod 'GoogleUtilities', :modular_headers => true
+   pod 'FirebaseCore', :modular_headers => true
+   pod 'FirebaseCoreExtension', :modular_headers => true
+   pod 'FirebaseInstallations', :modular_headers => true
+   pod 'GoogleDataTransport', :modular_headers => true
+   pod 'nanopb', :modular_headers => true
+   ```
+
+No AppDelegate changes. The SDK configures Firebase (unless the app already
+did), installs the `UNUserNotificationCenter` delegate and registers for remote
+notifications on `UIApplicationDidFinishLaunchingNotification`, so a tap that
+cold-starts the app is caught and parked for `getInitialNotification()`.
+Notifications that aren't ours (no `mb_id`) are forwarded to whichever delegate
+was installed before.
+
+Differences from Android:
+
+- `delivered` is reported only for pushes that arrive while the app is in the
+  foreground. Background deliveries would need a Notification Service
+  Extension; `opened` is always reported.
+- `channelName`, `smallIcon` and `accentColor` are ignored — iOS draws the
+  notification with the app icon.
+- No image in the notification (also an extension's job); `image` still
+  reaches JS in the payload.
+- `getFcmToken()` waits up to 15 s for APNs to issue a device token. On a
+  simulator that needs iOS 16+ on an Apple silicon Mac.
 
 ---
 

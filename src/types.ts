@@ -58,6 +58,27 @@ export interface DeviceInfo {
   fcmToken: string
 }
 
+/**
+ * Everything the server keeps about this device, for diagnostics screens.
+ * Fields beyond `DeviceInfo` are optional because older servers may omit them.
+ */
+export interface DeviceDetails extends DeviceInfo {
+  /** OS permission as read on the device right now, not the server's copy. */
+  permission: PermissionStatus
+  /** False once FCM reported the token dead; such devices get no sends. */
+  active?: boolean
+  platform?: string
+  appVersion?: string | null
+  sdkVersion?: string | null
+  deviceModel?: string | null
+  osVersion?: string | null
+  language?: string | null
+  timezone?: string | null
+  createdAt?: string
+  updatedAt?: string
+  lastSeenAt?: string
+}
+
 export type PermissionStatus = 'granted' | 'denied' | 'not_determined' | 'unsupported'
 
 export type Unsubscribe = () => void
