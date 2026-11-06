@@ -216,6 +216,12 @@ Setup in the host app:
    pod 'nanopb', :modular_headers => true
    ```
 
+If the app also uses `@react-native-firebase` (which pulls Firebase through
+Swift Package Manager), skip the pods above: the podspec then takes
+FirebaseMessaging through RNFirebase's own SPM helper, at the same pinned
+version, so FirebaseCore exists only once. RNFirebase with SPM requires
+`use_frameworks! :linkage => :dynamic`.
+
 No AppDelegate changes. The SDK configures Firebase (unless the app already
 did), installs the `UNUserNotificationCenter` delegate and registers for remote
 notifications on `UIApplicationDidFinishLaunchingNotification`, so a tap that
